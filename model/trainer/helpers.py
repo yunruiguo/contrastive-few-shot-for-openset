@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import os.path as osp
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from model.dataloader.samplers import CategoriesSampler, RandomSampler, ClassSampler
@@ -65,24 +66,19 @@ def get_dataloader(args):
                                   batch_sampler=train_sampler,
                                   pin_memory=True)
 
-    #if args.multi_gpu and num_device > 1:
-        #train_loader = MultiGPUDataloader(train_loader, num_device)
-        #args.way = args.way * num_device
-
     valset = Dataset('val', args)
     val_sampler = CategoriesSampler(valset.label,
                             args.num_eval_episodes,
-                            args.eval_way, args.eval_shot + args.eval_query)
+                            args.eval_way + args.open_eval_way, args.eval_shot + args.eval_query)
     val_loader = DataLoader(dataset=valset,
                             batch_sampler=val_sampler,
                             num_workers=args.num_workers,
                             pin_memory=True)
-    
-    
+
     testset = Dataset('test', args)
     test_sampler = CategoriesSampler(testset.label,
-                            10000, # args.num_eval_episodes,
-                            args.eval_way, args.eval_shot + args.eval_query)
+                            args.num_test_episodes,
+                            args.eval_way + args.open_eval_way, args.eval_shot + args.eval_query)
     test_loader = DataLoader(dataset=testset,
                             batch_sampler=test_sampler,
                             num_workers=args.num_workers,
@@ -90,13 +86,20 @@ def get_dataloader(args):
 
     return train_loader, val_loader, test_loader
 
-def prepare_model(args):
+def prepare_model(args, trlog):
     model = eval(args.model_class)(args)
 
     # load pre-trained model (no FC weights)
-    if args.init_weights is not None:
-        model_dict = model.state_dict()        
-        pretrained_dict = torch.load(args.init_weights)['params']
+
+    if args.init_weights > -1:
+        trlog['acc'] = 0
+        trlog['acc_interval'] = 0
+        model_dict = model.state_dict()
+        if args.init_weights == 0:
+            pretrained_dict = torch.load(args.save_path + '/max_auc.pth')['params']
+            trlog = torch.load(osp.join(args.save_path, 'trlog'))
+        elif args.init_weights == 1:
+            pretrained_dict = torch.load('./saves/initialization/miniimagenet' + '/feat-{}-shot.pth'.format(args.shot))['params']
         if args.backbone_class == 'ConvNet':
             pretrained_dict = {'encoder.'+k: v for k, v in pretrained_dict.items()}
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
@@ -104,9 +107,11 @@ def prepare_model(args):
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
 
+
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
-        
+
+    print('Current device: ', torch.cuda.current_device())
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
     if args.multi_gpu:
@@ -115,12 +120,13 @@ def prepare_model(args):
     else:
         para_model = model.to(device)
 
-    return model, para_model
+    return model, para_model, trlog
 
 def prepare_optimizer(model, args):
-    top_para = [v for k,v in model.named_parameters() if 'encoder' not in k]       
+    top_para = [v for k,v in model.named_parameters() if 'encoder' not in k and 'margin' not in k]
+    margin_para = [v for k,v in model.named_parameters() if 'margin' in k]
     # as in the literature, we use ADAM for ConvNet and SGD for other backbones
-    if args.backbone_class == 'ConvNet':
+    if args.backbone_class in ['ConvNet']:
         optimizer = optim.Adam(
             [{'params': model.encoder.parameters()},
              {'params': top_para, 'lr': args.lr * args.lr_mul}],
@@ -135,7 +141,14 @@ def prepare_optimizer(model, args):
             momentum=args.mom,
             nesterov=True,
             weight_decay=args.weight_decay
-        )        
+        )
+        optimizer_margin = optim.SGD(
+            [{'params': margin_para, 'lr': args.lr * args.lr_mul}],
+            lr=args.lr,
+            momentum=args.mom,
+            nesterov=True,
+            weight_decay=args.weight_decay
+        )
 
     if args.lr_scheduler == 'step':
         lr_scheduler = optim.lr_scheduler.StepLR(
@@ -143,12 +156,22 @@ def prepare_optimizer(model, args):
                             step_size=int(args.step_size),
                             gamma=args.gamma
                         )
+        lr_scheduler_margin = optim.lr_scheduler.StepLR(
+            optimizer_margin,
+            step_size=int(args.step_size),
+            gamma=args.gamma
+        )
     elif args.lr_scheduler == 'multistep':
         lr_scheduler = optim.lr_scheduler.MultiStepLR(
                             optimizer,
                             milestones=[int(_) for _ in args.step_size.split(',')],
                             gamma=args.gamma,
                         )
+        lr_scheduler_margin = optim.lr_scheduler.MultiStepLR(
+            optimizer_margin,
+            milestones=[int(_) for _ in args.step_size.split(',')],
+            gamma=args.gamma
+        )
     elif args.lr_scheduler == 'cosine':
         lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(
                             optimizer,
@@ -158,4 +181,4 @@ def prepare_optimizer(model, args):
     else:
         raise ValueError('No Such Scheduler')
 
-    return optimizer, lr_scheduler
+    return optimizer, lr_scheduler, optimizer_margin, lr_scheduler_margin

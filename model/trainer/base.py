@@ -12,10 +12,6 @@ from model.logger import Logger
 class Trainer(object, metaclass=abc.ABCMeta):
     def __init__(self, args):
         self.args = args
-        # ensure_path(
-        #     self.args.save_path,
-        #     scripts_to_save=['model/models', 'model/networks', __file__],
-        # )
         self.logger = Logger(args, osp.join(args.save_path))
 
         self.train_step = 0
@@ -27,16 +23,16 @@ class Trainer(object, metaclass=abc.ABCMeta):
 
         # train statistics
         self.trlog = {}
-        self.trlog['max_acc'] = 0.0
-        self.trlog['max_acc_epoch'] = 0
-        self.trlog['max_acc_interval'] = 0.0
+        self.trlog['max_auc'] = 0.0
+        self.trlog['max_auc_epoch'] = 0
+        self.trlog['max_auc_interval'] = 0.0
 
     @abc.abstractmethod
     def train(self):
         pass
 
     @abc.abstractmethod
-    def evaluate(self, data_loader):
+    def open_evaluate(self, data_loader):
         pass
     
     @abc.abstractmethod
@@ -50,16 +46,22 @@ class Trainer(object, metaclass=abc.ABCMeta):
     def try_evaluate(self, epoch):
         args = self.args
         if self.train_epoch % args.eval_interval == 0:
-            vl, va, vap = self.evaluate(self.val_loader)
+            vl, va, vap, auc_sna, auc_sna_p = self.open_evaluate(self.val_loader)
             self.logger.add_scalar('val_loss', float(vl), self.train_epoch)
             self.logger.add_scalar('val_acc', float(va),  self.train_epoch)
-            print('epoch {}, val, loss={:.4f} acc={:.4f}+{:.4f}'.format(epoch, vl, va, vap))
+            print('epoch {}, val, auc={:.4f} acc={:.4f}+{:.4f}'.format(epoch, auc_sna, va, vap))
 
-            if va >= self.trlog['max_acc']:
-                self.trlog['max_acc'] = va
-                self.trlog['max_acc_interval'] = vap
-                self.trlog['max_acc_epoch'] = self.train_epoch
-                self.save_model('max_acc')
+            if auc_sna >= self.trlog['max_auc']:
+                self.trlog['max_auc'] = auc_sna
+                self.trlog['max_auc_interval'] = auc_sna_p
+                self.trlog['max_auc_epoch'] = self.train_epoch
+                self.trlog['acc'] = va
+                self.trlog['acc_interval'] = vap
+                self.trlog['optim_lr'] = self.optimizer.param_groups[0]['lr']
+                self.trlog['margin_optim_lr'] = self.optimizer_margin.param_groups[0]['lr']
+                torch.save(self.trlog, osp.join(args.save_path, 'trlog'))
+                self.save_model('max_auc')
+
 
     def try_logging(self, tl1, tl2, ta, tg=None):
         args = self.args
@@ -89,6 +91,7 @@ class Trainer(object, metaclass=abc.ABCMeta):
             dict(params=self.model.state_dict()),
             osp.join(self.args.save_path, name + '.pth')
         )
+
 
     def __str__(self):
         return "{}({})".format(

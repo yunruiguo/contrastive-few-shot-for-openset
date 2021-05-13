@@ -31,7 +31,9 @@ class FewShotModel(nn.Module):
                      torch.Tensor(np.arange(args.way*args.shot, args.way * (args.shot + args.query))).long().view(1, args.query, args.way))
         else:
             return  (torch.Tensor(np.arange(args.eval_way*args.eval_shot)).long().view(1, args.eval_shot, args.eval_way), 
-                     torch.Tensor(np.arange(args.eval_way*args.eval_shot, args.eval_way * (args.eval_shot + args.eval_query))).long().view(1, args.eval_query, args.eval_way))
+                     torch.Tensor(np.arange((args.eval_way + args.open_eval_way)*args.eval_shot, \
+                                            (args.eval_way + args.open_eval_way) * (args.eval_shot + args.eval_query))).long().view(\
+                         1, args.eval_query, args.eval_way + args.open_eval_way))
 
     def forward(self, x, get_feature=False):
         if get_feature:
@@ -40,15 +42,15 @@ class FewShotModel(nn.Module):
         else:
             # feature extraction
             x = x.squeeze(0)
-            instance_embs = self.encoder(x)
-            num_inst = instance_embs.shape[0]
+            self.instance_embs = self.encoder(x)
+
             # split support query set for few-shot data
-            support_idx, query_idx = self.split_instances(x)
+            self.support_idx, self.query_idx = self.split_instances(x)
             if self.training:
-                logits, logits_reg = self._forward(instance_embs, support_idx, query_idx)
+                logits, logits_reg = self._forward(self.instance_embs, self.support_idx, self.query_idx)
                 return logits, logits_reg
             else:
-                logits = self._forward(instance_embs, support_idx, query_idx)
+                logits = self._forward(self.instance_embs, self.support_idx, self.query_idx)
                 return logits
 
     def _forward(self, x, support_idx, query_idx):

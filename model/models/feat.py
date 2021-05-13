@@ -85,7 +85,8 @@ class FEAT(FewShotModel):
             hdim = 640
         else:
             raise ValueError('')
-        
+        self.margin = nn.Parameter(torch.Tensor(1))
+        self.margin.data.fill_(0)
         self.slf_attn = MultiHeadAttention(1, hdim, hdim, hdim, dropout=0.5)          
         
     def _forward(self, instance_embs, support_idx, query_idx):
@@ -103,7 +104,7 @@ class FEAT(FewShotModel):
     
         # query: (num_batch, num_query, num_proto, num_emb)
         # proto: (num_batch, num_proto, num_emb)
-        proto = self.slf_attn(proto, proto, proto)        
+        proto = self.slf_attn(proto, proto, proto)
         if self.args.use_euclidean:
             query = query.view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
             proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
@@ -115,7 +116,6 @@ class FEAT(FewShotModel):
             query = query.view(num_batch, -1, emb_dim) # (Nbatch,  Nq*Nw, d)
 
             logits = torch.bmm(query, proto.permute([0,2,1])) / self.args.temperature
-            logits = logits.view(-1, num_proto)
         
         # for regularization
         if self.training:
