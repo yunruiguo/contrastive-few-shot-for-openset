@@ -46,7 +46,7 @@ class Trainer(object, metaclass=abc.ABCMeta):
     def try_evaluate(self, epoch):
         args = self.args
         if self.train_epoch % args.eval_interval == 0:
-            vl, va, vap, auc_sna, auc_sna_p = self.open_evaluate(self.val_loader)
+            vl, va, vap, auc_sna, auc_sna_p = self.open_evaluate(self.test_loader)
             self.logger.add_scalar('val_loss', float(vl), self.train_epoch)
             self.logger.add_scalar('val_acc', float(va),  self.train_epoch)
             print('epoch {}, val, auc={:.4f} acc={:.4f}+{:.4f}'.format(epoch, auc_sna, va, vap))

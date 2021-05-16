@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import os.path as osp
+import os
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from model.dataloader.samplers import CategoriesSampler, RandomSampler, ClassSampler
@@ -90,16 +90,17 @@ def prepare_model(args, trlog):
     model = eval(args.model_class)(args)
 
     # load pre-trained model (no FC weights)
-
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+    trlog['acc'] = 0
+    trlog['acc_interval'] = 0
     if args.init_weights > -1:
-        trlog['acc'] = 0
-        trlog['acc_interval'] = 0
+
         model_dict = model.state_dict()
         if args.init_weights == 0:
             pretrained_dict = torch.load(args.save_path + '/max_auc.pth')['params']
-            trlog = torch.load(osp.join(args.save_path, 'trlog'))
+            trlog = torch.load(os.path.join(args.save_path, 'trlog'))
         elif args.init_weights == 1:
-            pretrained_dict = torch.load('./saves/initialization/miniimagenet' + '/feat-{}-shot.pth'.format(args.shot))['params']
+            pretrained_dict = torch.load('./saves/' + args.dataset + '/feat-{}-shot.pth'.format(args.shot))['params']
         if args.backbone_class == 'ConvNet':
             pretrained_dict = {'encoder.'+k: v for k, v in pretrained_dict.items()}
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
@@ -112,13 +113,14 @@ def prepare_model(args, trlog):
         torch.backends.cudnn.benchmark = True
 
     print('Current device: ', torch.cuda.current_device())
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.cuda()
     if args.multi_gpu:
-        model.encoder = nn.DataParallel(model.encoder, dim=0)
-        para_model = model.to(device)
+        model.encoder = nn.DataParallel(model.encoder, device_ids=[0, 1])
+        # para_model = nn.DataParallel(model, device_ids=[0, 1])
+        para_model = model.cuda()
     else:
-        para_model = model.to(device)
+        para_model = model.cuda()
 
     return model, para_model, trlog
 

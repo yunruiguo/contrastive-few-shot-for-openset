@@ -14,8 +14,10 @@ from model.utils import (
     Averager, Timer, count_acc, one_hot,
     compute_confidence_interval,
 )
-from tensorboardX import SummaryWriter
-from collections import deque
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = False
+torch.backends.cudnn.allow_tf32 = True
 from tqdm import tqdm
 
 
@@ -56,7 +58,7 @@ class FSLTrainer(Trainer):
         self.model.train()
         if self.args.fix_BN:
             self.model.encoder.eval()
-        
+
         # start FSL training
         label, label_aux = self.prepare_label()
         for epoch in range(1, args.max_epoch + 1):
@@ -88,14 +90,15 @@ class FSLTrainer(Trainer):
                 e_sim_p_pos = F.relu(e_sim_p)
                 e_sim_p_neg = F.relu(-e_sim_p)
 
-                l_open_margin = e_sim_p_pos.mean(-1)
-                l_open = e_sim_p_neg.mean(-1)
+                l_open_margin = args.open_balance * e_sim_p_pos.mean(-1)
+                l_open = args.open_balance * e_sim_p_neg.mean(-1)
                 if reg_logits is not None:
                     loss = F.cross_entropy(logits, label)
-                    total_loss = loss + args.balance * F.cross_entropy(reg_logits, label_aux)
+                    reg_loss = args.balance * F.cross_entropy(reg_logits, label_aux)
+                    total_loss = loss + reg_loss
                 else:
                     loss = F.cross_entropy(logits, label)
-                total_loss = total_loss + args.open_balance * l_open
+                total_loss = total_loss + l_open
                 tl2.add(loss)
                 forward_tm = time.time()
                 self.ft.add(forward_tm - data_tm)
@@ -105,11 +108,12 @@ class FSLTrainer(Trainer):
                 ta.add(acc)
 
                 self.optimizer.zero_grad()
-                total_loss.backward(retain_graph=True)
-
+                total_loss.backward(torch.randn_like(total_loss), retain_graph=True)
+                torch.cuda.synchronize()
                 self.optimizer_margin.zero_grad()
 
-                l_open_margin.backward()
+                l_open_margin.backward(torch.randn_like(l_open_margin))
+
                 self.optimizer.step()
                 self.optimizer_margin.step()
 
@@ -121,8 +125,8 @@ class FSLTrainer(Trainer):
                 # refresh start_tm
                 start_tm = time.time()
 
-            print('lr: {:.4f} Total_loss: {:.4f} ce_loss {:.4f} l_open: {:4f} R: {:4f}\n'.format(self.optimizer_margin.param_groups[0]['lr'],\
-                total_loss.item(), loss.item(), l_open.item(), self.model.margin.item()))
+            print('lr: {:.4f} Total_loss: {:.4f} ce_loss {:.4f} l_open: {:4f} R: {:4f} aux_loss: {:4f}'.format(self.optimizer_margin.param_groups[0]['lr'],\
+                total_loss.item(), loss.item(), l_open.item(), self.model.margin.item(), reg_loss))
             self.lr_scheduler.step()
             self.lr_scheduler_margin.step()
 
@@ -141,7 +145,7 @@ class FSLTrainer(Trainer):
         args = self.args
         # evaluation mode
         self.model.eval()
-        record = np.zeros((args.num_test_episodes, 4))  # loss and acc
+        record = np.zeros((len(data_loader), 4))  # loss and acc
 
         label = torch.arange(args.eval_way, dtype=torch.int16).repeat(args.eval_query)
         label = label.type(torch.LongTensor)

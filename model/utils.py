@@ -111,7 +111,7 @@ def compute_confidence_interval(data):
 
 def postprocess_args(args):
     args.num_classes = args.way
-    save_path1 = args.dataset
+    save_path1 = args.dataset + '-' + str(args.shot) + '-' + 'shot'
     save_path2 = args.experiment_name
             
     if not os.path.exists(os.path.join(args.save_dir, save_path1)):
@@ -125,14 +125,14 @@ def get_command_line_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--max_epoch', type=int, default=600)
     parser.add_argument('--episodes_per_epoch', type=int, default=128)
-    parser.add_argument('--num_eval_episodes', type=int, default=600)
+    parser.add_argument('--num_eval_episodes', type=int, default=400)
     parser.add_argument('--num_test_episodes', type=int, default=600)
     parser.add_argument('--model_class', type=str, default='FEAT', 
                         choices=['MatchNet', 'ProtoNet', 'BILSTM', 'DeepSet', 'GCN', 'FEAT', 'FEATSTAR', 'SemiFEAT', 'SemiProtoFEAT']) # None for MatchNet or ProtoNet
     parser.add_argument('--use_euclidean', action='store_true', default=False)
     parser.add_argument('--backbone_class', type=str, default='Res12',
                         choices=['ConvNet', 'Res12', 'Res18', 'WRN'])
-    parser.add_argument('--dataset', type=str, default='MiniImageNet',
+    parser.add_argument('--dataset', type=str, default='CUB',
                         choices=['MiniImageNet', 'TieredImageNet', 'CUB'])
     
     parser.add_argument('--way', type=int, default=5)
@@ -143,17 +143,17 @@ def get_command_line_parser():
     parser.add_argument('--eval_shot', type=int, default=5)
     parser.add_argument('--query', type=int, default=15)
     parser.add_argument('--eval_query', type=int, default=15)
-    parser.add_argument('--balance', type=float, default=0.02)
-    parser.add_argument('--open_balance', type=float, default=0.01)
-    parser.add_argument('--temperature', type=float, default=1)
-    parser.add_argument('--temperature2', type=float, default=1)  # the temperature in the
+    parser.add_argument('--balance', type=float, default=0.01)
+    parser.add_argument('--open_balance', type=float, default=0.1)
+    parser.add_argument('--temperature', type=float, default=16)
+    parser.add_argument('--temperature2', type=float, default=16)  # the temperature in the
      
     # optimization parameters
     parser.add_argument('--orig_imsize', type=int, default=-1) # -1 for no cache, and -2 for no resize, only for MiniImageNet and CUB
-    parser.add_argument('--lr', type=float, default=0.002)
+    parser.add_argument('--lr', type=float, default=0.0002)
     parser.add_argument('--lr_mul', type=float, default=1)
     parser.add_argument('--lr_scheduler', type=str, default='multistep', choices=['multistep', 'step', 'cosine'])
-    parser.add_argument('--step_size', type=str, default='20,40,80,300')
+    parser.add_argument('--step_size', type=str, default='20,40,80,160,320')
     parser.add_argument('--gamma', type=float, default=0.2)
     parser.add_argument('--fix_BN', action='store_true', default=False)     # means we do not update the running mean/var in BN, not to freeze BN
     parser.add_argument('--augment',   action='store_true', default=False)

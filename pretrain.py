@@ -14,14 +14,14 @@ from tqdm import tqdm
 # pre-train model, compute validation acc after 500 epoches
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--max_epoch', type=int, default=500)
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--max_epoch', type=int, default=800)
+    parser.add_argument('--lr', type=float, default=0.02)
     parser.add_argument('--ngpu', type=int, default=1, help='0 = CPU.')
-    parser.add_argument('--dataset', type=str, default='MiniImageNet', choices=['MiniImageNet', 'TieredImagenet', 'CUB'])    
+    parser.add_argument('--dataset', type=str, default='CUB', choices=['MiniImageNet', 'TieredImagenet', 'CUB'])
     parser.add_argument('--backbone_class', type=str, default='Res12', choices=['ConvNet', 'Res12'])
-    parser.add_argument('--schedule', type=int, nargs='+', default=[75, 150, 300], help='Decrease learning rate at these epochs.')
-    parser.add_argument('--gamma', type=float, default=0.1)
+    parser.add_argument('--schedule', type=int, nargs='+', default=[40, 80, 160, 320, 640], help='Decrease learning rate at these epochs.')
+    parser.add_argument('--gamma', type=float, default=0.5)
     parser.add_argument('--query', type=int, default=15)    
     parser.add_argument('--resume', type=bool, default=False)
     args = parser.parse_args()
@@ -68,7 +68,7 @@ if __name__ == '__main__':
         torch.backends.cudnn.benchmark = True
         if args.ngpu  > 1:
             model.encoder = torch.nn.DataParallel(model.encoder, device_ids=list(range(args.ngpu)))
-        
+
         model = model.cuda()
         criterion = criterion.cuda()
     

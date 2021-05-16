@@ -27,10 +27,11 @@ class FewShotModel(nn.Module):
     def split_instances(self, data):
         args = self.args
         if self.training:
-            return  (torch.Tensor(np.arange(args.way*args.shot)).long().view(1, args.shot, args.way), 
+            return  (torch.Tensor(np.arange(args.way*args.shot)).long().view(1, args.shot, args.way),
                      torch.Tensor(np.arange(args.way*args.shot, args.way * (args.shot + args.query))).long().view(1, args.query, args.way))
         else:
-            return  (torch.Tensor(np.arange(args.eval_way*args.eval_shot)).long().view(1, args.eval_shot, args.eval_way), 
+            support_ = torch.Tensor(np.arange((args.eval_way + args.open_eval_way)*args.eval_shot)).long().reshape([1, args.eval_shot, args.eval_way + args.open_eval_way])
+            return  (support_[:, :, :args.eval_way],
                      torch.Tensor(np.arange((args.eval_way + args.open_eval_way)*args.eval_shot, \
                                             (args.eval_way + args.open_eval_way) * (args.eval_shot + args.eval_query))).long().view(\
                          1, args.eval_query, args.eval_way + args.open_eval_way))

@@ -19,7 +19,7 @@ if __name__ == '__main__':
     print('Number device: ', torch.cuda.device_count())
     set_gpu(args.gpu)
     trainer = FSLTrainer(args)
-    # trainer.train()
+    trainer.train()
     trainer.evaluate_test()
     trainer.final_record()
     print(args.save_path)

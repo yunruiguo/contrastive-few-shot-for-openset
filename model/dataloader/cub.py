@@ -1,7 +1,7 @@
 import os.path as osp
 import PIL
 from PIL import Image
-
+import torch
 import numpy as np
 from torch.utils.data import Dataset
 from torchvision import transforms
@@ -9,7 +9,7 @@ from torchvision import transforms
 THIS_PATH = osp.dirname(__file__)
 ROOT_PATH1 = osp.abspath(osp.join(THIS_PATH, '..', '..', '..'))
 ROOT_PATH2 = osp.abspath(osp.join(THIS_PATH, '..', '..'))
-IMAGE_PATH = osp.join(ROOT_PATH1, 'data/cub')
+IMAGE_PATH = osp.join(ROOT_PATH2, 'data/cub')
 SPLIT_PATH = osp.join(ROOT_PATH2, 'data/cub/split')
 CACHE_PATH = osp.join(ROOT_PATH2, '.cache/')
 
@@ -99,14 +99,13 @@ class CUB(Dataset):
             context = l.split(',')
             name = context[0] 
             wnid = context[1]
-            path = osp.join(IMAGE_PATH, name)
+            path = osp.join(IMAGE_PATH, 'images', name)
             if wnid not in self.wnids:
                 self.wnids.append(wnid)
                 lb += 1
                 
             data.append(path)
             label.append(lb)
-
         return data, label
 
 
