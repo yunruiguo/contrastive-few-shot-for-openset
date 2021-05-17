@@ -9,9 +9,9 @@ from torchvision import transforms
 THIS_PATH = osp.dirname(__file__)
 ROOT_PATH1 = osp.abspath(osp.join(THIS_PATH, '..', '..', '..'))
 ROOT_PATH2 = osp.abspath(osp.join(THIS_PATH, '..', '..'))
-IMAGE_PATH = osp.join(ROOT_PATH2, 'data/cub')
-SPLIT_PATH = osp.join(ROOT_PATH2, 'data/cub/split')
-CACHE_PATH = osp.join(ROOT_PATH2, '.cache/')
+IMAGE_PATH = osp.join(ROOT_PATH1, 'data/cub')
+SPLIT_PATH = osp.join(ROOT_PATH1, 'data/cub/split')
+CACHE_PATH = osp.join(ROOT_PATH1, '.cache/')
 
 # This is for the CUB dataset
 # It is notable, we assume the cub images are cropped based on the given bounding boxes
