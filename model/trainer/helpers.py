@@ -125,8 +125,9 @@ def prepare_model(args, trlog):
     return model, para_model, trlog
 
 def prepare_optimizer(model, args):
-    top_para = [v for k,v in model.named_parameters() if 'encoder' not in k and 'margin' not in k]
-    margin_para = [v for k,v in model.named_parameters() if 'margin' in k]
+    top_para = [v for k,v in model.named_parameters() if 'encoder' not in k and 'margin' not in k and 'recipro' not in k]
+    margin_para = [v for k,v in model.named_parameters() if 'margin' in k or 'recipro' in k]
+
     # as in the literature, we use ADAM for ConvNet and SGD for other backbones
     if args.backbone_class in ['ConvNet']:
         optimizer = optim.Adam(

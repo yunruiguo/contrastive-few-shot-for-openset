@@ -84,21 +84,25 @@ class FSLTrainer(Trainer):
                 logits = logits.view(-1, args.way)
                 oh_query = torch.nn.functional.one_hot(label, args.way)
 
-                sims = logits
-                temp = (sims * oh_query).sum(-1)
-                e_sim_p = temp - self.model.margin
-                e_sim_p_pos = F.relu(e_sim_p)
-                e_sim_p_neg = F.relu(-e_sim_p)
+                sims = (logits * oh_query).sum(-1) - self.model.margin
+                e_sim_pos = F.relu(sims)
+                e_sim_neg = F.relu(-sims)
 
-                l_open_margin = args.open_balance * e_sim_p_pos.mean(-1)
-                l_open = args.open_balance * e_sim_p_neg.mean(-1)
+                dism = ((logits - self.model.recipro) * (1 - oh_query))
+                e_dism_pos = F.relu(dism).mean(-1)
+                e_dism_neg = F.relu(-dism).mean(-1)
+
+                l_open_margin = args.open_balance * e_sim_pos.mean(-1)
+                l_open_recipro = args.open_disbalance * e_dism_neg.mean(-1)
+                l_open = args.open_balance * e_sim_neg.mean(-1)
+                l_recipro = args.open_disbalance * e_dism_pos.mean(-1)
                 if reg_logits is not None:
                     loss = F.cross_entropy(logits, label)
                     reg_loss = args.balance * F.cross_entropy(reg_logits, label_aux)
                     total_loss = loss + reg_loss
                 else:
                     loss = F.cross_entropy(logits, label)
-                total_loss = total_loss + l_open
+                total_loss = total_loss + l_open + l_recipro
                 tl2.add(loss)
                 forward_tm = time.time()
                 self.ft.add(forward_tm - data_tm)
@@ -111,8 +115,8 @@ class FSLTrainer(Trainer):
                 total_loss.backward(torch.randn_like(total_loss), retain_graph=True)
                 torch.cuda.synchronize()
                 self.optimizer_margin.zero_grad()
-
-                l_open_margin.backward(torch.randn_like(l_open_margin))
+                total_open_loss = l_open_margin + l_open_recipro
+                total_open_loss.backward(torch.randn_like(total_open_loss))
 
                 self.optimizer.step()
                 self.optimizer_margin.step()
@@ -125,8 +129,9 @@ class FSLTrainer(Trainer):
                 # refresh start_tm
                 start_tm = time.time()
 
-            print('lr: {:.4f} Total_loss: {:.4f} ce_loss {:.4f} l_open: {:4f} R: {:4f} aux_loss: {:4f}'.format(self.optimizer_margin.param_groups[0]['lr'],\
-                total_loss.item(), loss.item(), l_open.item(), self.model.margin.item(), reg_loss))
+            print('lr: {:.4f} Total_loss: {:.4f} ce_loss {:.4f} l_open: {:4f} R: {:4f} aux_loss: {:4f}, l_recipro: {:4f} R1: {:4f}'.format( \
+                self.optimizer_margin.param_groups[0]['lr'],  total_loss.item(), loss.item(), l_open.item(), \
+                self.model.margin.item(), reg_loss.item(), l_open_recipro.item(), self.model.recipro.item()))
             self.lr_scheduler.step()
             self.lr_scheduler_margin.step()
 

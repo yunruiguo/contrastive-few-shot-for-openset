@@ -87,7 +87,9 @@ class FEAT(FewShotModel):
         else:
             raise ValueError('')
         self.margin = nn.Parameter(torch.Tensor(1))
-        self.margin.data.fill_(0)
+        self.margin.data.fill_(-1)
+        self.recipro = nn.Parameter(torch.Tensor(1))
+        self.recipro.data.fill_(0)
         self.slf_attn = MultiHeadAttention(1, hdim, hdim, hdim, dropout=0.5)          
         
     def _forward(self, instance_embs, support_idx, query_idx):
